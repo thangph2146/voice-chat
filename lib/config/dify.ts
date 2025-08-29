@@ -1,5 +1,4 @@
-import { logger } from '../logger';
-import type { DifyConfig, ConfigValidationResult, DifyPerformanceMetrics } from '../types/dify';
+import type { ConfigValidationResult, DifyPerformanceMetrics } from '../types/dify';
 
 // ==================== CONFIGURATION ====================
 

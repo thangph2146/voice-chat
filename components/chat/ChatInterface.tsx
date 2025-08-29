@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, FormEvent } from "react";
-import { Paperclip, Mic, CornerDownLeft } from "lucide-react";
+import { useState } from "react";
+import { Trash2, RefreshCw, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   ChatBubble,
@@ -9,142 +9,198 @@ import {
   ChatBubbleMessage,
 } from "@/components/ui/chat-bubble";
 import { ChatMessageList } from "@/components/ui/chat-message-list";
-import { ChatInput } from "@/components/ui/chat-input";
+import { WaveformVisualizer } from "@/components/ui/waveform-visualizer";
+import { useChat } from "@/lib/hooks/useChat";
+import { logger } from "@/lib/logger";
 
 export function ChatInterface() {
-  const [messages, setMessages] = useState([
-    {
-      id: 1,
-      content: "Hello! How can I help you today?",
-      sender: "ai",
-    },
-    {
-      id: 2,
-      content: "I have a question about the component library.",
-      sender: "user",
-    },
-    {
-      id: 3,
-      content: "Sure! I'd be happy to help. What would you like to know?",
-      sender: "ai",
-    },
-  ]);
+  const {
+    messages,
+    isLoading,
+    error,
+    conversationId,
+    sendMessage,
+    clearMessages,
+    retryLastMessage,
+    cancelRequest,
+    metrics
+  } = useChat();
 
-  const [input, setInput] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
+  const [speechError, setSpeechError] = useState<string | null>(null);
 
-  const handleSubmit = (e: FormEvent) => {
-    e.preventDefault();
-    if (!input.trim()) return;
+  // Handle transcript from speech recognition
+  const handleTranscript = async (text: string) => {
+    if (!text.trim()) return;
 
-    setMessages((prev) => [
-      ...prev,
-      {
-        id: prev.length + 1,
-        content: input,
-        sender: "user",
-      },
-    ]);
-    setInput("");
-    setIsLoading(true);
+    logger.info("CHAT_INTERFACE", "Received speech transcript", { text });
+    setSpeechError(null);
 
-    setTimeout(() => {
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: prev.length + 1,
-          content: "This is an AI response to your message.",
-          sender: "ai",
-        },
-      ]);
-      setIsLoading(false);
-    }, 1000);
+    try {
+      await sendMessage(text);
+    } catch (error) {
+      logger.error("CHAT_INTERFACE", "Error sending message", error);
+    }
   };
 
-  const handleAttachFile = () => {
-    //
+  // Handle speech recognition errors
+  const handleSpeechError = (errorMessage: string) => {
+    setSpeechError(errorMessage);
+    logger.error("CHAT_INTERFACE", "Speech recognition error", { error: errorMessage });
   };
 
-  const handleMicrophoneClick = () => {
-    //
+  // Clear speech error
+  const clearSpeechError = () => {
+    setSpeechError(null);
   };
 
   return (
-    <div className="h-full border bg-background rounded-lg flex flex-col py-20">
-      <div className="flex-1 overflow-hidden">
-        <ChatMessageList>
-          {messages.map((message) => (
-            <ChatBubble
-              key={message.id}
-              variant={message.sender === "user" ? "sent" : "received"}
-            >
-              <ChatBubbleAvatar
-                className="h-8 w-8 shrink-0"
-                src={
-                  message.sender === "user"
-                    ? "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=64&h=64&q=80&crop=faces&fit=crop"
-                    : "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=64&h=64&q=80&crop=faces&fit=crop"
-                }
-                fallback={message.sender === "user" ? "US" : "AI"}
-              />
-              <ChatBubbleMessage
-                variant={message.sender === "user" ? "sent" : "received"}
-              >
-                {message.content}
-              </ChatBubbleMessage>
-            </ChatBubble>
-          ))}
-
-          {isLoading && (
-            <ChatBubble variant="received">
-              <ChatBubbleAvatar
-                className="h-8 w-8 shrink-0"
-                src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=64&h=64&q=80&crop=faces&fit=crop"
-                fallback="AI"
-              />
-              <ChatBubbleMessage isLoading />
-            </ChatBubble>
+    <div className="h-[100dvh] border bg-background rounded-lg flex flex-col">
+      {/* Header with controls */}
+      <div className="flex items-center justify-between p-4 border-b">
+        <div className="flex items-center space-x-2">
+          <h2 className="text-lg font-semibold">Voice Chat</h2>
+          {conversationId && (
+            <span className="text-xs text-gray-500">ID: {conversationId.slice(-8)}</span>
           )}
-        </ChatMessageList>
+        </div>
+        
+        <div className="flex items-center space-x-2">
+          {/* Performance metrics */}
+          <div className="text-xs text-gray-500">
+            {metrics.totalRequests > 0 && (
+              <span>
+                {metrics.successfulRequests}/{metrics.totalRequests} 
+                ({Math.round(metrics.averageResponseTime)}ms avg)
+              </span>
+            )}
+          </div>
+
+          {/* Clear conversation */}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={clearMessages}
+            disabled={isLoading || messages.length === 0}
+          >
+            <Trash2 className="w-4 h-4 mr-1" />
+            Xóa
+          </Button>
+
+          {/* Retry last message */}
+          {error && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={retryLastMessage}
+              disabled={isLoading}
+            >
+              <RefreshCw className="w-4 h-4 mr-1" />
+              Thử lại
+            </Button>
+          )}
+
+          {/* Cancel request */}
+          {isLoading && (
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={cancelRequest}
+            >
+              Hủy
+            </Button>
+          )}
+        </div>
       </div>
 
-      <div className="p-4 border-t">
-        <form
-          onSubmit={handleSubmit}
-          className="relative rounded-lg border bg-background focus-within:ring-1 focus-within:ring-ring p-1"
-        >
-          <ChatInput
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder="Type your message..."
-            className="min-h-12 resize-none rounded-lg bg-background border-0 p-3 shadow-none focus-visible:ring-0"
-          />
-          <div className="flex items-center p-3 pt-0 justify-between">
-            <div className="flex">
-              <Button
-                variant="ghost"
-                size="icon"
-                type="button"
-                onClick={handleAttachFile}
-              >
-                <Paperclip className="size-4" />
-              </Button>
-
-              <Button
-                variant="ghost"
-                size="icon"
-                type="button"
-                onClick={handleMicrophoneClick}
-              >
-                <Mic className="size-4" />
-              </Button>
+      {/* Error display */}
+      {(error || speechError) && (
+        <div className="p-4 border-b bg-red-50 border-red-200">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center text-red-800">
+              <AlertCircle className="w-4 h-4 mr-2" />
+              <span className="text-sm">
+                {speechError || error}
+              </span>
             </div>
-            <Button type="submit" size="sm" className="ml-auto gap-1.5">
-              Send Message
-              <CornerDownLeft className="size-3.5" />
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={speechError ? clearSpeechError : () => {}}
+              className="text-red-600 hover:text-red-800"
+            >
+              ✕
             </Button>
           </div>
-        </form>
+        </div>
+      )}
+
+      {/* Chat messages */}
+      <div className="flex-1 overflow-hidden">
+        {messages.length === 0 ? (
+          <div className="flex items-center justify-center h-full text-gray-500">
+            <div className="text-center">
+              <div className="text-6xl mb-4">🎤</div>
+              <h3 className="text-lg font-medium mb-2">Chào mừng đến với Voice Chat</h3>
+              <p className="text-sm">Nhấn nút micro để bắt đầu trò chuyện bằng giọng nói</p>
+            </div>
+          </div>
+        ) : (
+          <ChatMessageList>
+            {messages.map((message) => (
+              <ChatBubble
+                key={message.id}
+                variant={message.role === "user" ? "sent" : "received"}
+              >
+                <ChatBubbleAvatar
+                  className="h-8 w-8 shrink-0"
+                  src={
+                    message.role === "user"
+                      ? "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=64&h=64&q=80&crop=faces&fit=crop"
+                      : "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=64&h=64&q=80&crop=faces&fit=crop"
+                  }
+                  fallback={message.role === "user" ? "U" : "AI"}
+                />
+                <ChatBubbleMessage
+                  variant={message.role === "user" ? "sent" : "received"}
+                  isLoading={message.isLoading}
+                >
+                  {message.error ? (
+                    <div className="text-red-600">
+                      <AlertCircle className="w-4 h-4 inline mr-1" />
+                      {message.error}
+                    </div>
+                  ) : (
+                    message.content
+                  )}
+                </ChatBubbleMessage>
+              </ChatBubble>
+            ))}
+          </ChatMessageList>
+        )}
+      </div>
+
+      {/* Voice input with waveform visualizer */}
+      <div className="p-4 border-t">
+        <WaveformVisualizer
+          onTranscript={handleTranscript}
+          onError={handleSpeechError}
+          disabled={isLoading}
+          className="w-full"
+        />
+        
+        {/* Status indicator */}
+        <div className="flex items-center justify-center mt-3 text-xs text-gray-500">
+          {isLoading ? (
+            <div className="flex items-center">
+              <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-600 mr-2"></div>
+              Đang xử lý...
+            </div>
+          ) : messages.length > 0 ? (
+            <span>Sẵn sàng cho câu hỏi tiếp theo</span>
+          ) : (
+            <span>Hãy nói để bắt đầu cuộc trò chuyện</span>
+          )}
+        </div>
       </div>
     </div>
   );

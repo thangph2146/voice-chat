@@ -115,7 +115,7 @@ export const useChat = (): UseChatReturn => {
     setIsLoading(true);
 
     // Add user message
-    const userMessageId = addMessage({
+    addMessage({
       content: message.trim(),
       role: 'user'
     });
